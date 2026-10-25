@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="ko" class="h-full bg-[#202225] text-[#dcddde] select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>이커머스 배송 정시 도착 예측 분석 계획서 | Discord SlideDeck</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Anime.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            discord: {
+              blurple: '#5865F2',
+              'blurple-hover': '#4752C4',
+              green: '#57F287',
+              yellow: '#FEE75C',
+              fuchsia: '#EB459E',
+              red: '#ED4245',
+              dark: '#36393f',
+              darker: '#2f3136',
+              darkest: '#202225',
+              channel: '#2b2d31',
+              card: '#2b2d31',
+              border: '#202225',
+              muted: '#949ba4',
+              text: '#dbdee1',
+              highlight: '#ffffff'
+            }
+          },
+          fontFamily: {
+            sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Consolas', 'Courier New', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+    body {
+      font-family: 'Pretendard', sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #2b2d31;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1a1b1e;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #111214;
+    }
+
+    /* Discord Tag badge */
+    .bot-tag {
+      background: #5865F2;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      line-height: 1.2;
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+    }
+
+    /* Discord Embed Card Styling */
+    .discord-embed {
+      background: #2f3136;
+      border-radius: 4px;
+      border-left: 4px solid #5865F2;
+      position: relative;
+    }
+
+    .embed-cyan { border-left-color: #00b0f4; }
+    .embed-green { border-left-color: #57F287; }
+    .embed-yellow { border-left-color: #FEE75C; }
+    .embed-fuchsia { border-left-color: #EB459E; }
+    .embed-red { border-left-color: #ED4245; }
+    .embed-blurple { border-left-color: #5865F2; }
+
+    /* Reaction pill */
+    .reaction-pill {
+      background: #2b2d31;
+      border: 1px solid #3f4147;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .reaction-pill:hover {
+      background: #35373c;
+      border-color: #5865F2;
+    }
+    .reaction-pill.active {
+      background: rgba(88, 101, 242, 0.2);
+      border-color: #5865F2;
+    }
+
+    /* Pulse beacon */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+    .pulse-dot {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+
+    /* Tooltip */
+    .tooltip-box {
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .has-tooltip:hover .tooltip-box {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="h-full w-full flex overflow-hidden bg-[#202225] text-[#dbdee1] antialiased">
+
+  <!-- =====================================================================
+       MINIM HELPER & UTILITIES INLINE MODULE
+       ===================================================================== -->
+  <script>
+    // Lightweight utility library ('minim') for UI interactions, audio feedback & reactive state
+    window.minim = {
+      // Audio synth for Discord-like sound effects (No external audio files needed!)
+      audio: {
+        ctx: null,
+        enabled: true,
+        init() {
+          if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+        },
+        playTone(freq, type = 'sine', duration = 0.08, gainVal = 0.04) {
+          if (!this.enabled) return;
+          try {
+            this.init();
+            if (!this.ctx) return;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+          } catch (e) {}
+        },
+        slideChange() {
+          this.playTone(440, 'triangle', 0.06, 0.03);
+          setTimeout(() => this.playTone(660, 'sine', 0.08, 0.03), 40);
+        },
+        click() {
+          this.playTone(800, 'square', 0.02, 0.015);
+        },
+        ping() {
+          this.playTone(880, 'sine', 0.12, 0.05);
+          setTimeout(() => this.playTone(1320, 'sine', 0.18, 0.04), 80);
+        }
+      },
+      formatNumber(n) {
+        return new Intl.NumberFormat('ko-KR').format(n);
+      }
+    };
+  </script>
+
+  <!-- =====================================================================
+       LEFT-MOST: DISCORD SERVER / GUILD SIDEBAR (72px)
+       ===================================================================== -->
+  <aside class="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 space-y-2 z-30 select-none flex-shrink-0">
+    <!-- Discord DM / Home Icon -->
+    <div class="relative group cursor-pointer" onclick="goToSlide(0)" title="홈 / 표지 슬라이드로">
+      <div class="absolute -left-3 top-2.5 w-2 bg-white rounded-r-full transition-all duration-200 h-5 group-hover:h-8" id="server-indicator-home"></div>
+      <div class="w-12 h-12 rounded-[24px] group-hover:rounded-[16px] bg-[#5865F2] flex items-center justify-center text-white transition-all duration-200 shadow-md group-hover:bg-[#4752C4]">
+        <i data-lucide="compass" class="w-7 h-7"></i>
+      </div>
+      <!-- Tooltip -->
+      <div class="absolute left-16 top-2 z-50 bg-[#111214] text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity">
+        이커머스 배송 분석 계획서
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="w-8 h-[2px] bg-[#35363c] rounded my-1"></div>
+
+    <!-- Data Course Guild Icon -->
+    <div class="relative group cursor-pointer" onclick="toggleServerInfo()">
+      <div class="absolute -left-3 top-2 w-2 bg-white rounded-r-full transition-all duration-200 h-10"></div>
+      <div class="w-12 h-12 rounded-[16px] bg-[#2b2d31] border border-[#5865F2]/40 flex items-center justify-center text-white transition-all duration-200 shadow-md group-hover:bg-[#5865F2]">
+        <span class="font-black text-sm tracking-tighter text-[#5865F2] group-hover:text-white">DL101</span>
+      </div>
+      <div class="absolute left-16 top-2 z-50 bg-[#111214] text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity">
+        데이터리터러시_중간과제_V1
+      </div>
+    </div>
+
+    <!-- Kaggle Shipping Dataset Guild Icon -->
+    <div class="relative group cursor-pointer" onclick="alert('📦 본 슬라이드는 Kaggle의 E-Commerce Shipping Data를 기반으로 설계된 분석 계획서입니다.')">
+      <div class="w-12 h-12 rounded-[24px] group-hover:rounded-[16px] bg-[#2b2d31] flex items-center justify-center text-emerald-400 transition-all duration-200 hover:bg-emerald-600 hover:text-white">
+        <i data-lucide="package-search" class="w-6 h-6"></i>
+      </div>
+      <div class="absolute left-16 top-2 z-50 bg-[#111214] text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity">
+        원천 데이터: E-Commerce Shipping Data
+      </div>
+    </div>
+
+    <!-- Add / Explore Guild -->
+    <div class="relative group cursor-pointer" onclick="toggleSound()">
+      <div class="w-12 h-12 rounded-[24px] group-hover:rounded-[16px] bg-[#2b2d31] flex items-center justify-center text-[#57F287] transition-all duration-200 hover:bg-[#57F287] hover:text-black" id="sound-btn">
+        <i data-lucide="volume-2" class="w-6 h-6" id="sound-icon"></i>
+      </div>
+      <div class="absolute left-16 top-2 z-50 bg-[#111214] text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity" id="sound-tooltip">
+        디스코드 효과음 켜짐 (클릭시 토글)
+      </div>
+    </div>
+
+    <div class="flex-grow"></div>
+
+    <!-- Presentation Mode Toggle -->
+    <div class="relative group cursor-pointer pb-2" onclick="toggleFullscreen()">
+      <div class="w-12 h-12 rounded-[24px] group-hover:rounded-[16px] bg-[#2b2d31] flex items-center justify-center text-[#949ba4] transition-all duration-200 hover:bg-[#35373c] hover:text-white">
+        <i data-lucide="maximize" class="w-5 h-5"></i>
+      </div>
+      <div class="absolute left-16 top-2 z-50 bg-[#111214] text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity">
+        전체화면 발표 모드 (F)
+      </div>
+    </div>
+  </aside>
+
+  <!-- =====================================================================
+       SIDEBAR: DISCORD CHANNELS LIST (240px)
+       ===================================================================== -->
+  <aside id="channel-sidebar" class="w-60 bg-[#2b2d31] flex flex-col z-20 flex-shrink-0 transition-all duration-300 border-r border-[#202225]">
+    <!-- Server Title Header -->
+    <div class="h-12 border-b border-[#202225] px-4 flex items-center justify-between shadow-sm cursor-pointer hover:bg-[#35373c]/50 transition-colors">
+      <div class="flex items-center space-x-2">
+        <span class="font-bold text-white text-sm tracking-wide truncate">📊 데이터리터러시_과제</span>
+        <i data-lucide="badge-check" class="w-4 h-4 text-[#5865F2] fill-[#5865F2]"></i>
+      </div>
+      <i data-lucide="chevron-down" class="w-4 h-4 text-[#949ba4]"></i>
+    </div>
+
+    <!-- Channel Categories -->
+    <div class="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+      
+      <!-- Voice Channel Mockup -->
+      <div>
+        <div class="text-[11px] font-bold text-[#949ba4] uppercase tracking-wider px-2 flex items-center justify-between mb-1">
+          <span>음성 채널 (Live)</span>
+          <span class="text-[10px] text-[#57F287] flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-[#57F287] mr-1 pulse-dot"></span>발표중</span>
+        </div>
+        <div class="flex items-center px-2 py-1.5 rounded text-white bg-[#35373c] text-xs font-medium space-x-2">
+          <i data-lucide="volume-2" class="w-4 h-4 text-[#57F287]"></i>
+          <span class="truncate">🔊 중간고사_대체과제_세미나</span>
+        </div>
+        <div class="ml-6 mt-1 flex items-center space-x-1.5 text-[11px] text-[#949ba4]">
+          <div class="w-4 h-4 rounded-full bg-[#5865F2] text-[9px] flex items-center justify-center text-white font-bold">비</div>
+          <span>비전공 데이터 입문자 (발표자)</span>
+        </div>
+      </div>
+
+      <!-- Slides as Text Channels -->
+      <div>
+        <div class="text-[11px] font-bold text-[#949ba4] uppercase tracking-wider px-2 flex items-center justify-between mb-1.5">
+          <span>분석 계획서 슬라이드 (7)</span>
+          <i data-lucide="plus" class="w-3.5 h-3.5 hover:text-white cursor-pointer"></i>
+        </div>
+
+        <nav class="space-y-0.5 text-xs font-medium" id="channel-nav">
+          <!-- Slide 1 -->
+          <button onclick="goToSlide(0)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left active-channel" data-slide="0">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">01-표지-리터러시-접근</span>
+          </button>
+          
+          <!-- Slide 2 -->
+          <button onclick="goToSlide(1)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left" data-slide="1">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">02-주제-수집설계</span>
+          </button>
+
+          <!-- Slide 3 -->
+          <button onclick="goToSlide(2)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left" data-slide="2">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">03-week02-편향진단</span>
+          </button>
+
+          <!-- Slide 4 -->
+          <button onclick="goToSlide(3)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left" data-slide="3">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">04-week03-정제로그</span>
+          </button>
+
+          <!-- Slide 5 -->
+          <button onclick="goToSlide(4)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left" data-slide="4">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">05-week04-기술통계</span>
+          </button>
+
+          <!-- Slide 6 -->
+          <button onclick="goToSlide(5)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left" data-slide="5">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">06-week04-분포시각화</span>
+          </button>
+
+          <!-- Slide 7 -->
+          <button onclick="goToSlide(6)" class="channel-link w-full flex items-center px-2.5 py-1.5 rounded text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1] transition-colors group text-left" data-slide="6">
+            <i data-lucide="hash" class="w-4 h-4 mr-1.5 text-[#949ba4] group-hover:text-white"></i>
+            <span class="truncate">07-결론-분석포부</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Quick Guidance Box -->
+      <div class="p-3 bg-[#202225] rounded-lg border border-[#35373c] text-[11px] text-[#949ba4] space-y-1.5">
+        <div class="text-[#dbdee1] font-semibold flex items-center space-x-1">
+          <i data-lucide="keyboard" class="w-3.5 h-3.5 text-[#5865F2]"></i>
+          <span>슬라이드 조작 단축키</span>
+        </div>
+        <div class="flex justify-between"><span>다음 슬라이드</span> <kbd class="px-1.5 py-0.5 bg-[#2b2d31] rounded text-white border border-[#3f4147]">→</kbd> <kbd class="px-1.5 py-0.5 bg-[#2b2d31] rounded text-white border border-[#3f4147]">Space</kbd></div>
+        <div class="flex justify-between"><span>이전 슬라이드</span> <kbd class="px-1.5 py-0.5 bg-[#2b2d31] rounded text-white border border-[#3f4147]">←</kbd></div>
+        <div class="flex justify-between"><span>채널 바로가기</span> <span class="text-[#5865F2]">마우스 클릭</span></div>
+      </div>
+
+    </div>
+
+    <!-- User Profile Bar (Bottom of Discord Sidebar) -->
+    <div class="h-[52px] bg-[#232428] px-2 flex items-center justify-between">
+      <div class="flex items-center space-x-2 cursor-pointer hover:bg-[#2b2d31] p-1 rounded-md transition-colors">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#5865F2] to-[#EB459E] flex items-center justify-center text-white font-bold text-xs">
+            학습
+          </div>
+          <div class="w-2.5 h-2.5 bg-[#57F287] rounded-full absolute bottom-0 right-0 border-2 border-[#232428]"></div>
+        </div>
+        <div class="text-left leading-tight">
+          <div class="text-xs font-bold text-white truncate max-w-[90px]">비전공데이터생</div>
+          <div class="text-[10px] text-[#949ba4]">#2024-MID</div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-1 text-[#949ba4]">
+        <button class="p-1 hover:text-white hover:bg-[#35373c] rounded" title="음소거 토글" onclick="toggleSound()">
+          <i data-lucide="mic" class="w-4 h-4"></i>
+        </button>
+        <button class="p-1 hover:text-white hover:bg-[#35373c] rounded" title="오디오 설정" onclick="minim.audio.ping()">
+          <i data-lucide="headphones" class="w-4 h-4"></i>
+        </button>
+        <button class="p-1 hover:text-white hover:bg-[#35373c] rounded" title="슬라이드 개요" onclick="goToSlide(0)">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- =====================================================================
+       MAIN SLIDE CONTAINER (CHATTING & EMBEDS VIEWPORT)
+       ===================================================================== -->
+  <main class="flex-1 flex flex-col h-full bg-[#313338] overflow-hidden relative">
+
+    <!-- Top Discord Channel Navigation Header -->
+    <header class="h-12 border-b border-[#202225] bg-[#313338] px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
+      <div class="flex items-center space-x-3 overflow-hidden">
+        <button class="md:hidden text-[#949ba4] hover:text-white" onclick="toggleSidebar()">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="flex items-center space-x-2 text-white font-bold text-sm">
+          <i data-lucide="hash" class="w-5 h-5 text-[#949ba4]"></i>
+          <span id="current-channel-title" class="truncate">01-표지-리터러시-접근</span>
+        </div>
+        <div class="h-4 w-[1px] bg-[#3f4147] hidden sm:block"></div>
+        <div class="text-xs text-[#949ba4] truncate hidden sm:block font-normal" id="current-channel-desc">
+          이커머스 배송 정시 도착 예측 분석 계획서 | 데이터 리터러시 관점
+        </div>
+      </div>
+
+      <!-- Right Header Actions (Slide Controller) -->
+      <div class="flex items-center space-x-3 flex-shrink-0">
+        <!-- Progress Counter Pill -->
+        <div class="bg-[#2b2d31] border border-[#3f4147] px-3 py-1 rounded-full text-xs font-mono font-semibold text-[#dbdee1] flex items-center space-x-1.5">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-[#5865F2]"></i>
+          <span>SLIDE</span>
+          <span id="slide-num-current" class="text-white font-bold">1</span>
+          <span class="text-[#72767d]">/</span>
+          <span id="slide-num-total" class="text-[#949ba4]">7</span>
+        </div>
+
+        <!-- Slide Nav Buttons -->
+        <div class="flex items-center bg-[#2b2d31] border border-[#3f4147] rounded-md p-0.5">
+          <button onclick="prevSlide()" class="p-1 hover:bg-[#35373c] text-[#949ba4] hover:text-white rounded transition-colors" title="이전 슬라이드 (←)">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <button onclick="nextSlide()" class="p-1 hover:bg-[#35373c] text-[#949ba4] hover:text-white rounded transition-colors" title="다음 슬라이드 (→)">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Member Sidebar Toggle Button -->
+        <button onclick="toggleMemberSidebar()" class="p-1.5 text-[#949ba4] hover:text-white hover:bg-[#35373c] rounded transition-colors hidden lg:block" title="참여자 목록 토글">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Slide Linear Progress Bar -->
+    <div class="w-full bg-[#202225] h-1 flex-shrink-0">
+      <div id="slide-progress" class="bg-gradient-to-r from-[#5865F2] via-[#57F287] to-[#EB459E] h-1 w-[14.28%] transition-all duration-300"></div>
+    </div>
+
+    <!-- Slide Content Viewport (Scrollable if height exceeds) -->
+    <div id="slide-viewport" class="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center relative">
+      
+      <!-- =================================================================
+           SLIDE 1: 표지 (Cover)
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6" data-slide-index="0">
+        <!-- Discord Bot Header message -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-11 h-11 rounded-full bg-gradient-to-br from-[#5865F2] to-[#4752C4] flex items-center justify-center text-white flex-shrink-0 shadow-lg">
+            <i data-lucide="bot" class="w-6 h-6"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm hover:underline cursor-pointer">DataLiteracy_Bot</span>
+              <span class="bot-tag">BOT</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:30 (중간고사 대체과제 제출)</span>
+            </div>
+            <p class="text-xs text-[#949ba4] mt-0.5">이커머스 고객 배송 데이터(E-Commerce Shipping Data) 분석 사전 계획서가 등록되었습니다.</p>
+          </div>
+        </div>
+
+        <!-- Main Discord Hero Embed Card -->
+        <div class="discord-embed embed-blurple p-6 md:p-8 shadow-2xl bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item">
+          <div class="flex items-center justify-between pb-3 border-b border-[#35373c]/60 mb-5">
+            <span class="text-xs font-bold text-[#5865F2] uppercase tracking-wider flex items-center">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 mr-1.5"></i>
+              2024 데이터 리터러시 중간고사 대체 과제 요건 완벽 준수
+            </span>
+            <span class="text-xs bg-[#5865F2]/20 text-[#5865F2] px-2.5 py-1 rounded-full font-mono font-medium">
+              STATUS: PROPOSAL ONLY (사전설계)
+            </span>
+          </div>
+
+          <h1 class="text-2xl md:text-4xl font-extrabold text-white leading-tight tracking-tight mb-3">
+            이커머스 배송 정시 도착 예측<br>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#5865F2] via-[#57F287] to-[#EB459E]">
+              분석 계획서
+            </span>
+          </h1>
+
+          <p class="text-base md:text-lg text-[#dbdee1] font-medium leading-relaxed mb-6">
+            "평균의 함정과 생존자 편향을 넘어선 비전공자 맞춤형 데이터 리터러시 접근"
+          </p>
+
+          <!-- Key Concept Pills -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div class="bg-[#202225] p-3 rounded border border-[#3f4147] flex items-center space-x-3">
+              <div class="w-9 h-9 rounded bg-[#ED4245]/20 text-[#ED4245] flex items-center justify-center flex-shrink-0">
+                <i data-lucide="shield-alert" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="text-[11px] text-[#949ba4]">Week 02 편향 진단</div>
+                <div class="text-xs font-bold text-white">생존자 편향 점검</div>
+              </div>
+            </div>
+
+            <div class="bg-[#202225] p-3 rounded border border-[#3f4147] flex items-center space-x-3">
+              <div class="w-9 h-9 rounded bg-[#FEE75C]/20 text-[#FEE75C] flex items-center justify-center flex-shrink-0">
+                <i data-lucide="filter" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="text-[11px] text-[#949ba4]">Week 03 결측치 정제</div>
+                <div class="text-xs font-bold text-white">임의 평균대치 금지</div>
+              </div>
+            </div>
+
+            <div class="bg-[#202225] p-3 rounded border border-[#3f4147] flex items-center space-x-3">
+              <div class="w-9 h-9 rounded bg-[#57F287]/20 text-[#57F287] flex items-center justify-center flex-shrink-0">
+                <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="text-[11px] text-[#949ba4]">Week 04 분포 & 요약</div>
+                <div class="text-xs font-bold text-white">이봉 분포 그룹 분리</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Meta Note -->
+          <div class="bg-[#232428] p-3.5 rounded text-xs text-[#949ba4] flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="info" class="w-4 h-4 text-[#5865F2]"></i>
+              <span>본 발표자료는 수식 대신 비전공자가 직관적으로 체감할 수 있는 일상적 비유를 사용합니다.</span>
+            </div>
+            <button onclick="nextSlide()" class="px-3 py-1 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded font-semibold text-xs flex items-center space-x-1 shadow transition-all">
+              <span>계획서 열람 시작</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Interactive Discord Reactions -->
+        <div class="flex items-center space-x-2 animate-item">
+          <button class="reaction-pill px-2.5 py-1 text-xs text-[#dbdee1] flex items-center space-x-1" onclick="toggleReaction(this)">
+            <span>📦</span>
+            <span class="font-bold reaction-count">14</span>
+          </button>
+          <button class="reaction-pill px-2.5 py-1 text-xs text-[#dbdee1] flex items-center space-x-1" onclick="toggleReaction(this)">
+            <span>🔥</span>
+            <span class="font-bold reaction-count">29</span>
+          </button>
+          <button class="reaction-pill px-2.5 py-1 text-xs text-[#dbdee1] flex items-center space-x-1" onclick="toggleReaction(this)">
+            <span>💡</span>
+            <span class="font-bold reaction-count">48</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           SLIDE 2: 주제 설명 및 수집 설계
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6 hidden" data-slide-index="1">
+        <!-- Message header -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-10 h-10 rounded-full bg-[#5865F2] flex items-center justify-center text-white flex-shrink-0">
+            <i data-lucide="help-circle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm">분석설계자_비전공학우</span>
+              <span class="text-xs bg-[#57F287]/20 text-[#57F287] font-semibold px-1.5 py-0.5 rounded">RESEARCH_LEAD</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:31</span>
+            </div>
+            <p class="text-xs text-[#949ba4]">#02 주제 설명과 원천 데이터의 관측 단위를 명확히 설계했습니다.</p>
+          </div>
+        </div>
+
+        <!-- Main Card: Research Question & Variables -->
+        <div class="discord-embed embed-cyan p-6 bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item space-y-5">
+          <!-- Big Core Research Question -->
+          <div class="bg-[#202225] p-4 rounded-lg border-l-4 border-[#00b0f4]">
+            <span class="text-xs font-bold text-[#00b0f4] uppercase tracking-wider block mb-1">
+              🎯 핵심 분석 질문 (Core Question)
+            </span>
+            <p class="text-lg md:text-xl font-bold text-white">
+              "배송 지연을 유발하는 결정적인 원인은 <span class="text-[#FEE75C] underline decoration-[#FEE75C]/50 underline-offset-4">제품의 무게</span>인가, 아니면 <span class="text-[#EB459E] underline decoration-[#EB459E]/50 underline-offset-4">고객 할인율</span>인가?"
+            </p>
+            <p class="text-xs text-[#949ba4] mt-2">
+              💡 일상 비유: "무거운 덤벨 세트 때문에 택배 기사님이 늦는 걸까, 아니면 파격 80% 세일로 주문이 폭주해서 물류창고가 마비된 걸까?"
+            </p>
+          </div>
+
+          <!-- Variable Definitions Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Target Variable -->
+            <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147]">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-[#57F287] uppercase tracking-wider flex items-center">
+                  <i data-lucide="target" class="w-4 h-4 mr-1"></i> Target 변수 (결과)
+                </span>
+                <span class="text-[11px] bg-[#57F287]/10 text-[#57F287] px-2 py-0.5 rounded font-mono">이진 분류 (0 or 1)</span>
+              </div>
+              <div class="font-mono text-sm font-bold text-white mb-1">Reached.on.Time_Y.N</div>
+              <p class="text-xs text-[#dbdee1] leading-relaxed">
+                약속된 예정 시각 안에 배송이 완료되었는가? <br>
+                <span class="text-[#57F287]">● 1: 정시 도착 성공</span> | <span class="text-[#ED4245]">● 0: 배송 지연 발생</span>
+              </p>
+            </div>
+
+            <!-- Feature Variables -->
+            <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147]">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-[#5865F2] uppercase tracking-wider flex items-center">
+                  <i data-lucide="sliders" class="w-4 h-4 mr-1"></i> Feature 변수 (예측 인자)
+                </span>
+                <span class="text-[11px] bg-[#5865F2]/10 text-[#5865F2] px-2 py-0.5 rounded font-mono">설명 변수</span>
+              </div>
+              <ul class="text-xs text-[#dbdee1] space-y-1.5 font-sans">
+                <li><strong class="text-white font-mono">Weight_in_gms:</strong> 화물 무게 (g)</li>
+                <li><strong class="text-white font-mono">Discount_offered:</strong> 제공된 할인율 (%)</li>
+                <li><strong class="text-white font-mono">Mode_of_Shipment:</strong> 운송 수단 (Ship, Flight, Road)</li>
+                <li><strong class="text-white font-mono">Customer_rating:</strong> 고객 평점 (1~5점)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Observational Unit Card (CRITICAL) -->
+          <div class="bg-[#232428] p-4 rounded-lg border border-[#35373c]">
+            <div class="flex items-center space-x-2 mb-2">
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-[#FEE75C]/20 text-[#FEE75C]">
+                관측 단위 (Unit of Observation)
+              </span>
+              <span class="text-white font-bold text-sm">표의 가로 1행 = "고객 주문 1건" (Order ID)</span>
+            </div>
+            <p class="text-xs text-[#949ba4] leading-relaxed">
+              <strong class="text-[#dbdee1]">비전공자 눈높이 비유:</strong> 
+              "마트에서 출력되는 <span class="text-white underline">종이 영수증 1장</span>이 바로 데이터 표의 가로 한 줄입니다. 고객이 아무리 VIP 단골이어도, 이번에 결제한 주문 건마다 배송 무게와 할인율, 지연 여부가 각기 다르게 1행씩 기록됩니다."
+            </p>
+          </div>
+        </div>
+
+        <!-- Navigation helper -->
+        <div class="flex justify-between items-center text-xs text-[#949ba4] animate-item">
+          <span>← 이전: 표지</span>
+          <button onclick="nextSlide()" class="text-[#5865F2] hover:underline flex items-center">
+            다음: Week 02 편향 진단 계획 살펴보기 →
+          </button>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           SLIDE 3: 편향 진단 계획 (Week 02)
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6 hidden" data-slide-index="2">
+        <!-- Message header -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-10 h-10 rounded-full bg-[#ED4245] flex items-center justify-center text-white flex-shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm">데이터검증관_Week02</span>
+              <span class="text-xs bg-[#ED4245]/20 text-[#ED4245] font-semibold px-1.5 py-0.5 rounded">BIAS_HUNTER</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:32</span>
+            </div>
+            <p class="text-xs text-[#949ba4]">#03 엑셀을 열기 전, '누가 이 표에 들어오지 못했는가'를 먼저 추적합니다.</p>
+          </div>
+        </div>
+
+        <!-- Embed: Survivorship Bias & Missing Orders -->
+        <div class="discord-embed embed-red p-6 bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item space-y-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-[#ED4245] uppercase tracking-wider flex items-center">
+              <i data-lucide="skull" class="w-4 h-4 mr-1.5"></i>
+              Week 02 편향 진단 계획
+            </span>
+            <span class="text-[11px] bg-[#ED4245]/15 text-[#ED4245] px-2.5 py-1 rounded font-bold">
+              생존자 편향 (Survivorship Bias) 경보
+            </span>
+          </div>
+
+          <h2 class="text-xl md:text-2xl font-extrabold text-white">
+            "이 데이터에 <span class="text-[#ED4245] underline decoration-wavy underline-offset-4">도착하지 못하고 사라진 주문</span>은 누구인가?"
+          </h2>
+
+          <!-- The Analogy Box -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147] flex flex-col justify-between">
+              <div>
+                <div class="text-xs font-bold text-[#FEE75C] mb-1 flex items-center">
+                  <i data-lucide="plane" class="w-4 h-4 mr-1"></i> 제2차 세계대전 전투기의 비유
+                </div>
+                <p class="text-xs text-[#dbdee1] leading-relaxed">
+                  귀환한 비행기 날개의 총탄 자국만 보강하려 했던 군대처럼, 
+                  <strong class="text-white">"끝까지 살아남아 배송 완료 테이블에 등록된 주문"</strong>만 들여다보면 
+                  정작 치명적인 원인을 영영 놓치게 됩니다.
+                </p>
+              </div>
+              <div class="mt-3 p-2 bg-[#2b2d31] rounded text-[11px] text-[#949ba4]">
+                격추된 비행기는 기지에 없듯, 극단적 불만 주문은 테이블에 없습니다!
+              </div>
+            </div>
+
+            <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147] flex flex-col justify-between">
+              <div>
+                <div class="text-xs font-bold text-[#EB459E] mb-1 flex items-center">
+                  <i data-lucide="coffee" class="w-4 h-4 mr-1"></i> 배달 앱 '별점 5점'의 배신
+                </div>
+                <p class="text-xs text-[#dbdee1] leading-relaxed">
+                  음식이 너무 늦어 주문 취소를 누르고 고객센터에 항의 후 환불받은 손님은 리뷰 자체를 쓸 수 없습니다. 
+                  우리의 배송 데이터에도 <strong class="text-white">'접수조차 안 된 가장 화난 고객'</strong>이 누락되었을 수 있습니다.
+                </p>
+              </div>
+              <div class="mt-3 p-2 bg-[#2b2d31] rounded text-[11px] text-[#949ba4]">
+                배송 지연율이 표면적으로 낮아 보이는 '가짜 행복' 현상 점검!
+              </div>
+            </div>
+          </div>
+
+          <!-- Specific Audit Action Plan -->
+          <div class="bg-[#232428] p-4 rounded-lg border border-[#35373c] space-y-2.5">
+            <div class="text-xs font-bold text-white flex items-center">
+              <i data-lucide="clipboard-check" class="w-4 h-4 mr-1.5 text-[#57F287]"></i>
+              향후 생존자 편향 점검 액션 플랜 (사전 검증 3단계)
+            </div>
+            
+            <div class="space-y-2 text-xs">
+              <div class="flex items-start space-x-2 text-[#dbdee1]">
+                <span class="w-5 h-5 rounded bg-[#35373c] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">1</span>
+                <div>
+                  <strong class="text-white">원천 결제 로그 vs 배송 DB 키 매칭:</strong> 결제 승인된 전체 Order ID 수와 현재 배송 데이터셋의 행 수를 1:1 대조하여 증발한 주문율(%)을 수치로 파악.
+                </div>
+              </div>
+              <div class="flex items-start space-x-2 text-[#dbdee1]">
+                <span class="w-5 h-5 rounded bg-[#35373c] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">2</span>
+                <div>
+                  <strong class="text-white">품절 및 접수 취소 건 추적:</strong> '재고 부족'으로 물류창고 출고조차 못 하고 즉시 취소된 주문 건이 Target 변수(지연)에 누락되었는지 확인.
+                </div>
+              </div>
+              <div class="flex items-start space-x-2 text-[#dbdee1]">
+                <span class="w-5 h-5 rounded bg-[#35373c] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">3</span>
+                <div>
+                  <strong class="text-white">편향 한계점 명시:</strong> 만약 누락 주문 복구가 불가하다면, "본 모델은 취소/환불되지 않고 최종 출고된 주문에 한해서만 유효하다"는 경계 조건을 보고서에 명기.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Quote -->
+        <div class="p-3 bg-[#202225] rounded text-xs text-[#949ba4] border-l-2 border-[#5865F2] animate-item">
+          💬 <strong class="text-white">데이터 리터러시 핵심 격언:</strong> "보이는 데이터만 분석하는 것은, 밤에 열쇠를 잃어버리고 가로등 밑만 뒤지는 취객과 같다."
+        </div>
+      </section>
+
+      <!-- =================================================================
+           SLIDE 4: 데이터 정제 계획 (Week 03)
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6 hidden" data-slide-index="3">
+        <!-- Message header -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-10 h-10 rounded-full bg-[#FEE75C] text-black flex items-center justify-center flex-shrink-0 font-bold">
+            <i data-lucide="wrench" class="w-5 h-5 text-[#202225]"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm">데이터정제반장_Week03</span>
+              <span class="text-xs bg-[#FEE75C]/20 text-[#FEE75C] font-semibold px-1.5 py-0.5 rounded">CLEANING_PROTOCOL</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:33</span>
+            </div>
+            <p class="text-xs text-[#949ba4]">#04 AI의 무지성 평균 대치 절대 금지 & 결측 원인 진단과 5열 정제 로그</p>
+          </div>
+        </div>
+
+        <!-- Embed: Cleaning Principles & 5-Column Cleaning Log -->
+        <div class="discord-embed embed-yellow p-6 bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item space-y-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-[#FEE75C] uppercase tracking-wider flex items-center">
+              <i data-lucide="shield-x" class="w-4 h-4 mr-1.5"></i>
+              Week 03 데이터 정제 철칙
+            </span>
+            <span class="text-[11px] bg-[#ED4245] text-white px-2 py-0.5 rounded font-black tracking-wider">
+              AI 무지성 평균대치 절대금지
+            </span>
+          </div>
+
+          <!-- Why no Mean Imputation? -->
+          <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147]">
+            <h3 class="text-sm font-bold text-white mb-2 flex items-center">
+              <span class="text-[#ED4245] mr-1.5">⚠️</span> 왜 결측치에 평균(Mean)을 채워 넣으면 안 되는가?
+            </h3>
+            <p class="text-xs text-[#dbdee1] leading-relaxed mb-3">
+              빈칸마다 평균값을 기계적으로 채워 넣으면 데이터의 <strong class="text-[#FEE75C]">표준편차(흩어진 정도)가 강제로 축소</strong>되어 세상이 실제보다 훨씬 평온하고 규칙적인 것처럼 왜곡됩니다.
+            </p>
+            <div class="p-2.5 bg-[#2b2d31] rounded text-[11px] text-[#949ba4] border-l-2 border-[#ED4245]">
+              <strong class="text-white">일상 비유:</strong> "시험을 안 본 결시자들에게 반 평균 70점을 몽땅 부여하면, 꼴찌도 사라지고 분산도 줄어들어 전교생이 모두 평범한 보통 학생인 양 착시가 발생합니다."
+            </div>
+          </div>
+
+          <!-- 3 Types of Missing Values Diagnosis -->
+          <div>
+            <div class="text-xs font-bold text-white mb-2 flex items-center">
+              <i data-lucide="search" class="w-4 h-4 mr-1.5 text-[#5865F2]"></i>
+              결측치가 발생한 '세 가지 이유' 진단 계획
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+              <div class="bg-[#202225] p-3 rounded border border-[#3f4147]">
+                <div class="text-[#57F287] font-bold text-[11px] mb-1">① 우연히 발생 (MCAR)</div>
+                <p class="text-[#949ba4] text-[11px] leading-relaxed">
+                  <strong class="text-[#dbdee1]">비유:</strong> 배송기사님이 비를 맞아 송장 잉크가 우연히 번진 경우.<br>
+                  <span class="text-[#57F287]">→ 편향 없이 단순 삭제 또는 샘플링 가능.</span>
+                </p>
+              </div>
+
+              <div class="bg-[#202225] p-3 rounded border border-[#3f4147]">
+                <div class="text-[#FEE75C] font-bold text-[11px] mb-1">② 다른 변수 때문 (MAR)</div>
+                <p class="text-[#949ba4] text-[11px] leading-relaxed">
+                  <strong class="text-[#dbdee1]">비유:</strong> 모바일 앱 주문자만 특정 체크박스를 그냥 지나친 경우.<br>
+                  <span class="text-[#FEE75C]">→ '주문 기기' 그룹별 패턴을 반영하여 보정.</span>
+                </p>
+              </div>
+
+              <div class="bg-[#202225] p-3 rounded border border-[#3f4147]">
+                <div class="text-[#ED4245] font-bold text-[11px] mb-1">③ 값 자체 때문 (MNAR)</div>
+                <p class="text-[#949ba4] text-[11px] leading-relaxed">
+                  <strong class="text-[#dbdee1]">비유:</strong> 배송이 너무 지연되어 분노한 고객이 별점 설문 제출 거부.<br>
+                  <span class="text-[#ED4245]">→ 빈칸 자체가 강력한 불만 시그널! '미응답' 별도 범주화.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mandatory 5-Column Cleaning Log Schema -->
+          <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147]">
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-xs font-bold text-white flex items-center">
+                <i data-lucide="table" class="w-4 h-4 mr-1.5 text-[#5865F2]"></i>
+                향후 작성할 [정제 로그 표] 5개 필수 열 표준 양식
+              </div>
+              <span class="text-[10px] text-[#5865F2] font-mono">5 Required Columns</span>
+            </div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-[11px] border-collapse">
+                <thead>
+                  <tr class="bg-[#2b2d31] text-[#949ba4] border-b border-[#3f4147]">
+                    <th class="p-2 font-bold text-white">1. 무엇을 (Target Column)</th>
+                    <th class="p-2 font-bold text-white">2. 왜 (Reason/Issue)</th>
+                    <th class="p-2 font-bold text-white">3. 어떻게 (Method)</th>
+                    <th class="p-2 font-bold text-white">4. 영향받은 행 수</th>
+                    <th class="p-2 font-bold text-[#57F287]">5. 지우지 않기로 한 결정</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[#35373c] text-[#dbdee1] font-mono">
+                  <tr class="hover:bg-[#2b2d31]/50">
+                    <td class="p-2 text-[#5865F2] font-bold">Customer_rating</td>
+                    <td class="p-2 font-sans">설문 거부 결측 (MNAR 의심)</td>
+                    <td class="p-2 font-sans">'미응답(-1)' 독립 범주 신설</td>
+                    <td class="p-2 text-white font-bold">142 건</td>
+                    <td class="p-2 font-sans text-xs text-[#57F287]">지연 불만 고객일 가능성 높아 보존</td>
+                  </tr>
+                  <tr class="hover:bg-[#2b2d31]/50">
+                    <td class="p-2 text-[#5865F2] font-bold">Discount_offered</td>
+                    <td class="p-2 font-sans">음수(-5%) 등 입력 오타</td>
+                    <td class="p-2 font-sans">부호 오류 검증 후 절대값 보정</td>
+                    <td class="p-2 text-white font-bold">18 건</td>
+                    <td class="p-2 font-sans text-xs text-[#57F287]">정상 구매 주문이므로 임의 행 삭제 금지</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           SLIDE 5: 기술통계 요약 계획 (Week 04)
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6 hidden" data-slide-index="4">
+        <!-- Message header -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-10 h-10 rounded-full bg-[#5865F2] flex items-center justify-center text-white flex-shrink-0">
+            <i data-lucide="calculator" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm">통계리터러시_Week04</span>
+              <span class="text-xs bg-[#5865F2]/20 text-[#5865F2] font-semibold px-1.5 py-0.5 rounded">STAT_SUMMARY</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:34</span>
+            </div>
+            <p class="text-xs text-[#949ba4]">#05 평균의 함정 극복: 평균 vs 중앙값 비교와 표준편차·n수 페어링 원칙</p>
+          </div>
+        </div>
+
+        <!-- Embed: Descriptive Stats Strategy -->
+        <div class="discord-embed embed-blurple p-6 bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item space-y-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-[#5865F2] uppercase tracking-wider flex items-center">
+              <i data-lucide="scale" class="w-4 h-4 mr-1.5"></i>
+              Week 04 기술통계 요약 설계
+            </span>
+            <span class="text-[11px] bg-[#5865F2]/10 text-[#5865F2] px-2.5 py-1 rounded font-bold">
+              평균(Mean) vs 중앙값(Median)
+            </span>
+          </div>
+
+          <!-- The Analogy: Bill Gates in a Bar -->
+          <div class="bg-[#202225] p-4 rounded-lg border-l-4 border-[#FEE75C]">
+            <div class="text-xs font-bold text-[#FEE75C] mb-1 flex items-center">
+              <i data-lucide="beer" class="w-4 h-4 mr-1"></i> 평균의 함정: "동네 호프집에 빌 게이츠가 들어오면?"
+            </div>
+            <p class="text-xs text-[#dbdee1] leading-relaxed">
+              동네 술집 손님 10명의 평균 자산은 몇천만 원이지만, 빌 게이츠가 합석하는 순간 <strong class="text-white">'평균 자산 100억 술집'</strong>이 됩니다. 
+              그러나 기존 손님들의 지갑 사정은 1원도 나아지지 않았습니다. 
+              마찬가지로 <strong class="text-[#EB459E]">할인율(Discount_offered)</strong>은 대부분 5~10%인데 소수의 반짝 폭탄세일(65%)이 전체 평균을 심각하게 끌어올립니다.
+            </p>
+          </div>
+
+          <!-- Summary Principle & Final Decision Rule -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Mandatory Pair: Std & N-count -->
+            <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147]">
+              <div class="text-xs font-bold text-[#57F287] mb-2 flex items-center">
+                <i data-lucide="check-check" class="w-4 h-4 mr-1"></i> 요약 제1원칙: 표준편차와 n수 쌍(Pair) 보고
+              </div>
+              <p class="text-xs text-[#dbdee1] leading-relaxed mb-2">
+                "평균 배송 무게는 4,000g이다"라고만 말하는 것은 절반의 거짓말입니다.
+              </p>
+              <div class="p-2.5 bg-[#2b2d31] rounded font-mono text-[11px] text-[#57F287]">
+                반드시 <span class="text-white font-bold">평균(Mean) ± 표준편차(SD)</span> 와 <span class="text-white font-bold">표본 수(n)</span>를 한 묶음으로 표기할 계획!
+              </div>
+            </div>
+
+            <!-- One-line Verdict Framework -->
+            <div class="bg-[#202225] p-4 rounded-lg border border-[#3f4147]">
+              <div class="text-xs font-bold text-[#EB459E] mb-2 flex items-center">
+                <i data-lucide="gavel" class="w-4 h-4 mr-1"></i> 최종 판정 도출 프레임워크
+              </div>
+              <p class="text-xs text-[#dbdee1] leading-relaxed mb-2">
+                각 변수마다 아래의 질문에 대해 <strong class="text-white">한 문장 판정문</strong>을 도출합니다:
+              </p>
+              <div class="p-2.5 bg-[#2b2d31] rounded text-[11px] text-[#dbdee1] italic border-l-2 border-[#EB459E]">
+                "이 열은 평균으로 요약해도 <span class="text-[#57F287]">되는가</span> / <span class="text-[#ED4245]">안 되는가</span>, 그리고 그 이유는 무엇인가?"
+              </div>
+            </div>
+          </div>
+
+          <!-- Example Verdict Card -->
+          <div class="bg-[#232428] p-3.5 rounded-lg border border-[#35373c] text-xs">
+            <span class="font-bold text-white block mb-1.5 flex items-center">
+              <i data-lucide="file-text" class="w-3.5 h-3.5 mr-1 text-[#5865F2]"></i> 변수별 판정문 도출 계획 예시:
+            </span>
+            <div class="space-y-1.5 text-[11px]">
+              <div class="flex items-center space-x-2">
+                <span class="px-1.5 py-0.5 rounded bg-[#ED4245]/20 text-[#ED4245] font-bold font-mono">Discount_offered</span>
+                <span class="text-[#dbdee1]">→ <strong>[판정: 불허]</strong> 극단적인 우측 꼬리 비대칭 분포이므로 평균 대신 중앙값(Median)과 사분위수(IQR)로 요약함.</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span class="px-1.5 py-0.5 rounded bg-[#FEE75C]/20 text-[#FEE75C] font-bold font-mono">Weight_in_gms</span>
+                <span class="text-[#dbdee1]">→ <strong>[판정: 조건부 불허]</strong> 1~2kg 대와 4~6kg 대가 공존하는 이봉 분포이므로 전체 단일 평균 사용 금지.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           SLIDE 6: 분포 시각화 계획 (Week 04)
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6 hidden" data-slide-index="5">
+        <!-- Message header -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-10 h-10 rounded-full bg-[#57F287] text-black flex items-center justify-center flex-shrink-0 font-bold">
+            <i data-lucide="line-chart" class="w-5 h-5 text-[#202225]"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm">시각화설계자_Week04</span>
+              <span class="text-xs bg-[#57F287]/20 text-[#57F287] font-semibold px-1.5 py-0.5 rounded">VISUAL_ENGINEER</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:35</span>
+            </div>
+            <p class="text-xs text-[#949ba4]">#06 bins 20개 이상의 히스토그램과 이봉 분포 분리 분석 계획</p>
+          </div>
+        </div>
+
+        <!-- Embed: Histogram Bins & Bimodal Splitting -->
+        <div class="discord-embed embed-green p-6 bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item space-y-5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-[#57F287] uppercase tracking-wider flex items-center">
+              <i data-lucide="bar-chart" class="w-4 h-4 mr-1.5"></i>
+              Week 04 분포 시각화 원칙
+            </span>
+            <span class="text-[11px] bg-[#57F287]/15 text-[#57F287] px-2.5 py-1 rounded font-bold">
+              구간(bins) ≥ 20 & 쌍봉 쪼개기
+            </span>
+          </div>
+
+          <!-- Bimodal distribution visual diagram -->
+          <div class="bg-[#202225] p-5 rounded-lg border border-[#3f4147]">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 class="text-sm font-bold text-white mb-1">
+                  "전체 평균이 '아무도 없는 빈 골짜기'를 가리키는 위험"
+                </h3>
+                <p class="text-xs text-[#949ba4]">
+                  초등학생(130cm)과 농구선수(200cm)를 섞어 평균 165cm라고 발표하면 유령의 수치가 됩니다.
+                </p>
+              </div>
+              <span class="text-xs bg-[#ED4245]/20 text-[#ED4245] px-3 py-1 rounded-full font-bold flex-shrink-0">
+                🚨 전체 평균 = 유령 데이터!
+              </span>
+            </div>
+
+            <!-- SVG Bimodal Distribution vs Split Chart Graphic -->
+            <div class="bg-[#2b2d31] p-4 rounded border border-[#35373c] flex flex-col items-center">
+              <div class="text-[11px] text-[#949ba4] mb-2 flex items-center space-x-3">
+                <span class="flex items-center"><span class="w-2.5 h-2.5 bg-[#5865F2] rounded mr-1"></span> 항공(Flight): 소형 경량 화물</span>
+                <span class="flex items-center"><span class="w-2.5 h-2.5 bg-[#EB459E] rounded mr-1"></span> 선박(Ship): 대형 중량 화물</span>
+                <span class="flex items-center text-[#ED4245] font-bold"><span class="w-3 h-0.5 bg-[#ED4245] mr-1"></span> 가짜 전체 평균</span>
+              </div>
+
+              <!-- Animated SVG Histogram -->
+              <svg viewBox="0 0 500 130" class="w-full h-32 overflow-visible" id="bimodal-svg">
+                <!-- Axes -->
+                <line x1="30" y1="110" x2="480" y2="110" stroke="#3f4147" stroke-width="1.5" />
+                
+                <!-- Bimodal Bins (20 bins) -->
+                <!-- Peak 1: Flight (Around 1500g) -->
+                <rect x="50" y="85" width="14" height="25" fill="#5865F2" opacity="0.8" rx="2" class="hist-bar" />
+                <rect x="68" y="55" width="14" height="55" fill="#5865F2" opacity="0.8" rx="2" class="hist-bar" />
+                <rect x="86" y="25" width="14" height="85" fill="#5865F2" opacity="0.9" rx="2" class="hist-bar" />
+                <rect x="104" y="20" width="14" height="90" fill="#5865F2" opacity="1.0" rx="2" class="hist-bar" />
+                <rect x="122" y="35" width="14" height="75" fill="#5865F2" opacity="0.9" rx="2" class="hist-bar" />
+                <rect x="140" y="65" width="14" height="45" fill="#5865F2" opacity="0.8" rx="2" class="hist-bar" />
+                <rect x="158" y="90" width="14" height="20" fill="#5865F2" opacity="0.7" rx="2" class="hist-bar" />
+
+                <!-- Valley (Empty zone where mean lands!) -->
+                <rect x="180" y="100" width="14" height="10" fill="#72767d" opacity="0.3" rx="2" />
+                <rect x="200" y="104" width="14" height="6" fill="#72767d" opacity="0.3" rx="2" />
+                <rect x="220" y="102" width="14" height="8" fill="#72767d" opacity="0.3" rx="2" />
+                <rect x="240" y="105" width="14" height="5" fill="#72767d" opacity="0.3" rx="2" />
+
+                <!-- Peak 2: Ship (Around 4500g) -->
+                <rect x="270" y="80" width="14" height="30" fill="#EB459E" opacity="0.7" rx="2" class="hist-bar" />
+                <rect x="290" y="50" width="14" height="60" fill="#EB459E" opacity="0.8" rx="2" class="hist-bar" />
+                <rect x="310" y="25" width="14" height="85" fill="#EB459E" opacity="0.9" rx="2" class="hist-bar" />
+                <rect x="330" y="15" width="14" height="95" fill="#EB459E" opacity="1.0" rx="2" class="hist-bar" />
+                <rect x="350" y="30" width="14" height="80" fill="#EB459E" opacity="0.9" rx="2" class="hist-bar" />
+                <rect x="370" y="60" width="14" height="50" fill="#EB459E" opacity="0.8" rx="2" class="hist-bar" />
+                <rect x="390" y="85" width="14" height="25" fill="#EB459E" opacity="0.7" rx="2" class="hist-bar" />
+                
+                <!-- Deceptive Mean Line right in the valley -->
+                <line x1="227" y1="5" x2="227" y2="110" stroke="#ED4245" stroke-width="2.5" stroke-dasharray="4" />
+                <circle cx="227" cy="10" r="4" fill="#ED4245" />
+                <text x="233" y="15" fill="#ED4245" font-size="10" font-weight="bold">전체 평균(Mean): 약 3,200g (데이터 전무 구간!)</text>
+
+                <!-- Labels -->
+                <text x="75" y="125" fill="#5865F2" font-size="10" font-weight="bold">봉우리 1: 경량 화물 (항공)</text>
+                <text x="310" y="125" fill="#EB459E" font-size="10" font-weight="bold">봉우리 2: 중량 화물 (선박)</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Planned Action Plan -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div class="bg-[#202225] p-3 rounded border border-[#3f4147]">
+              <span class="font-bold text-[#57F287] block mb-1">✅ 20개 이상 구간(bins) 히스토그램 필수 적용</span>
+              <p class="text-[#949ba4] leading-relaxed">
+                구간을 5개 이하로 너무 넓게 뭉개면 쌍봉이 하나의 뭉툭한 단봉으로 위장됩니다. 세밀한 20개 이상의 bin을 배치하여 숨은 골짜기를 찾아낼 계획입니다.
+              </p>
+            </div>
+
+            <div class="bg-[#202225] p-3 rounded border border-[#3f4147]">
+              <span class="font-bold text-[#EB459E] block mb-1">✅ 배송 수단(Mode_of_Shipment)별 분리 분석</span>
+              <p class="text-[#949ba4] leading-relaxed">
+                선박(Ship), 항공(Flight), 육로(Road)로 데이터를 즉시 쪼개어, 각 그룹별 평균과 표준편차를 따로따로 분리 산출할 계획입니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           SLIDE 7: 결론 (Conclusion)
+           ================================================================= -->
+      <section class="slide-pane w-full max-w-4xl mx-auto flex flex-col space-y-6 hidden" data-slide-index="6">
+        <!-- Message header -->
+        <div class="flex items-start space-x-4 animate-item">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5865F2] to-[#57F287] flex items-center justify-center text-white flex-shrink-0">
+            <i data-lucide="award" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white text-sm">데이터리터러시_최종선언</span>
+              <span class="text-xs bg-[#5865F2] text-white font-bold px-1.5 py-0.5 rounded">MISSION_READY</span>
+              <span class="text-xs text-[#949ba4]">오늘 20:36</span>
+            </div>
+            <p class="text-xs text-[#949ba4]">#07 코드를 돌리기 전에 직접 분포를 확인하고 쪼개는 비판적 분석 포부</p>
+          </div>
+        </div>
+
+        <!-- Embed: Final Manifesto -->
+        <div class="discord-embed embed-fuchsia p-6 md:p-8 bg-[#2b2d31] rounded-lg border border-[#35373c] animate-item space-y-6">
+          <div class="flex items-center justify-between pb-3 border-b border-[#35373c]/60">
+            <span class="text-xs font-bold text-[#EB459E] uppercase tracking-wider flex items-center">
+              <i data-lucide="compass" class="w-4 h-4 mr-1.5"></i>
+              분석가의 자세 (Data Literacy Manifesto)
+            </span>
+            <span class="text-xs bg-[#57F287]/20 text-[#57F287] px-2.5 py-0.5 rounded-full font-bold">
+              PLANNING COMPLETE
+            </span>
+          </div>
+
+          <h2 class="text-2xl md:text-3xl font-extrabold text-white leading-tight">
+            "머신러닝 코드를 돌리기 전에,<br>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#EB459E] via-[#FEE75C] to-[#57F287]">
+              데이터의 숨겨진 목소리와 결손을 먼저 꿰뚫어 본다"
+            </span>
+          </h2>
+
+          <p class="text-sm md:text-base text-[#dbdee1] leading-relaxed">
+            화려한 인공지능 알고리즘에 데이터를 무지성으로 밀어 넣는 것은 
+            <strong class="text-white">'쓰레기를 넣고 쓰레기를 뽑아내는 것(Garbage In, Garbage Out)'</strong>에 불과합니다. 
+            진정한 데이터 리터러시는 <strong class="text-[#5865F2]">"누가 이 테이블에서 제외되었는가?"</strong>를 의심하고, 
+            <strong class="text-[#FEE75C]">"평균이라는 편안한 거짓말에 속지 않는 것"</strong>에서 출발합니다.
+          </p>
+
+          <!-- 3 Pillars of Future Execution -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="bg-[#202225] p-3.5 rounded border border-[#3f4147]">
+              <div class="text-[#ED4245] font-bold text-xs mb-1 flex items-center">
+                <i data-lucide="eye-off" class="w-4 h-4 mr-1"></i> 의심하기
+              </div>
+              <p class="text-[11px] text-[#949ba4] leading-relaxed">
+                사라진 환불·취소 주문(생존자 편향)을 끝까지 추적해 모델의 한계를 명확히 규정하겠습니다.
+              </p>
+            </div>
+
+            <div class="bg-[#202225] p-3.5 rounded border border-[#3f4147]">
+              <div class="text-[#FEE75C] font-bold text-xs mb-1 flex items-center">
+                <i data-lucide="split" class="w-4 h-4 mr-1"></i> 쪼개어보기
+              </div>
+              <p class="text-[11px] text-[#949ba4] leading-relaxed">
+                이봉 분포의 유령 평균에 속지 않고, 운송 수단별로 그룹을 세분화하여 정밀 분석하겠습니다.
+              </p>
+            </div>
+
+            <div class="bg-[#202225] p-3.5 rounded border border-[#3f4147]">
+              <div class="text-[#57F287] font-bold text-xs mb-1 flex items-center">
+                <i data-lucide="file-check" class="w-4 h-4 mr-1"></i> 투명하게 기록하기
+              </div>
+              <p class="text-[11px] text-[#949ba4] leading-relaxed">
+                단 하나의 행도 몰래 지우지 않고 5열 정제 로그를 남겨 재현 가능한 과학적 분석을 완수하겠습니다.
+              </p>
+            </div>
+          </div>
+
+          <!-- Final Sign-off Box -->
+          <div class="bg-[#232428] p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 border border-[#35373c]">
+            <div>
+              <div class="text-xs font-bold text-white">2024학년도 데이터분석 입문 중간고사 대체 과제</div>
+              <div class="text-[11px] text-[#949ba4]">작성자: 비전공 데이터 리터러시 수강생 | 지도교수님 및 평가위원 귀하</div>
+            </div>
+            <button onclick="goToSlide(0)" class="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-bold rounded shadow transition-all flex items-center space-x-1.5 flex-shrink-0">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              <span>처음 표지로 돌아가기</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Discord Celebration Reactions -->
+        <div class="flex items-center space-x-2 animate-item">
+          <button class="reaction-pill active px-3 py-1 text-xs text-[#dbdee1] flex items-center space-x-1.5" onclick="toggleReaction(this)">
+            <span>🎓</span>
+            <span class="font-bold reaction-count">100</span>
+          </button>
+          <button class="reaction-pill active px-3 py-1 text-xs text-[#dbdee1] flex items-center space-x-1.5" onclick="toggleReaction(this)">
+            <span>🚀</span>
+            <span class="font-bold reaction-count">77</span>
+          </button>
+          <button class="reaction-pill active px-3 py-1 text-xs text-[#dbdee1] flex items-center space-x-1.5" onclick="toggleReaction(this)">
+            <span>👏</span>
+            <span class="font-bold reaction-count">99+</span>
+          </button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Slide Navigation Footer / Discord Chat Bar Placeholder -->
+    <footer class="h-14 bg-[#313338] px-4 flex items-center justify-between border-t border-[#202225] flex-shrink-0 z-10">
+      <!-- Fake Discord Input Box for quick help -->
+      <div class="flex-1 max-w-2xl bg-[#383a40] rounded-lg px-3 py-2 flex items-center text-xs text-[#949ba4] space-x-2 mr-3">
+        <i data-lucide="plus-circle" class="w-4 h-4 text-[#b5bac1] cursor-pointer hover:text-white"></i>
+        <span class="truncate">#01~#07 채널을 클릭하거나 키보드 방향키(←, →)로 슬라이드를 전환하세요...</span>
+      </div>
+
+      <!-- Quick Action Controls -->
+      <div class="flex items-center space-x-2">
+        <button onclick="prevSlide()" class="px-3 py-1.5 bg-[#2b2d31] hover:bg-[#35373c] text-xs font-medium text-[#dbdee1] hover:text-white rounded flex items-center space-x-1 border border-[#3f4147] transition-all">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">이전</span>
+        </button>
+        <button onclick="nextSlide()" class="px-3 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-xs font-bold text-white rounded flex items-center space-x-1 shadow transition-all">
+          <span class="hidden sm:inline">다음</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- =====================================================================
+       RIGHT-SIDEBAR: DISCORD MEMBERS LIST (240px)
+       ===================================================================== -->
+  <aside id="member-sidebar" class="w-60 bg-[#2b2d31] border-l border-[#202225] flex flex-col p-3 space-y-4 hidden lg:flex select-none z-20 flex-shrink-0">
+    <div class="text-[11px] font-bold text-[#949ba4] uppercase tracking-wider px-1">
+      발표 및 평가단 — 5
+    </div>
+
+    <!-- Group: Online -->
+    <div class="space-y-1">
+      <div class="text-[10px] font-bold text-[#949ba4] uppercase tracking-wider px-1 mb-1">
+        온라인 — 2
+      </div>
+      
+      <!-- Presenter -->
+      <div class="flex items-center space-x-2.5 p-1.5 rounded hover:bg-[#35373c] cursor-pointer transition-colors group">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#5865F2] to-[#EB459E] flex items-center justify-center text-white font-bold text-xs">
+            발표
+          </div>
+          <div class="w-2.5 h-2.5 bg-[#57F287] rounded-full absolute bottom-0 right-0 border-2 border-[#2b2d31]"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-white truncate flex items-center">
+            <span>비전공 데이터러너</span>
+          </div>
+          <div class="text-[10px] text-[#5865F2] font-semibold truncate">👑 발표자 / 계획서 작성</div>
+        </div>
+      </div>
+
+      <!-- Bot -->
+      <div class="flex items-center space-x-2.5 p-1.5 rounded hover:bg-[#35373c] cursor-pointer transition-colors group">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-white">
+            <i data-lucide="bot" class="w-5 h-5"></i>
+          </div>
+          <div class="w-2.5 h-2.5 bg-[#57F287] rounded-full absolute bottom-0 right-0 border-2 border-[#2b2d31]"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-white truncate flex items-center">
+            <span>DataLiteracy_Bot</span>
+            <span class="bot-tag">BOT</span>
+          </div>
+          <div class="text-[10px] text-[#949ba4] truncate">슬라이드 가이드 서빙 중</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group: Reviewers -->
+    <div class="space-y-1">
+      <div class="text-[10px] font-bold text-[#949ba4] uppercase tracking-wider px-1 mb-1">
+        평가위원 / 조교진 — 3
+      </div>
+
+      <!-- Professor -->
+      <div class="flex items-center space-x-2.5 p-1.5 rounded hover:bg-[#35373c] cursor-pointer transition-colors opacity-80 hover:opacity-100">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-[#35373c] flex items-center justify-center text-[#FEE75C] font-bold text-xs">
+            교수
+          </div>
+          <div class="w-2.5 h-2.5 bg-[#FEE75C] rounded-full absolute bottom-0 right-0 border-2 border-[#2b2d31]"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-[#dbdee1] truncate">데이터리터러시 지도교수</div>
+          <div class="text-[10px] text-[#FEE75C] truncate">심사위원장 [자리비움]</div>
+        </div>
+      </div>
+
+      <!-- Tutor -->
+      <div class="flex items-center space-x-2.5 p-1.5 rounded hover:bg-[#35373c] cursor-pointer transition-colors opacity-80 hover:opacity-100">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-[#35373c] flex items-center justify-center text-[#57F287] font-bold text-xs">
+            튜터
+          </div>
+          <div class="w-2.5 h-2.5 bg-[#57F287] rounded-full absolute bottom-0 right-0 border-2 border-[#2b2d31]"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-[#dbdee1] truncate">통계학 전공 수석튜터</div>
+          <div class="text-[10px] text-[#57F287] truncate">기술통계 검수관</div>
+        </div>
+      </div>
+
+      <!-- Logistics PM -->
+      <div class="flex items-center space-x-2.5 p-1.5 rounded hover:bg-[#35373c] cursor-pointer transition-colors opacity-70 hover:opacity-100">
+        <div class="relative">
+          <div class="w-8 h-8 rounded-full bg-[#35373c] flex items-center justify-center text-[#949ba4] font-bold text-xs">
+            물류
+          </div>
+          <div class="w-2.5 h-2.5 bg-[#72767d] rounded-full absolute bottom-0 right-0 border-2 border-[#2b2d31]"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-[#949ba4] truncate">이커머스 풀필먼트 PM</div>
+          <div class="text-[10px] text-[#72767d] truncate">오프라인</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Discord Server Mini Widget -->
+    <div class="mt-auto p-3 bg-[#202225] rounded-lg border border-[#3f4147] text-[11px] text-[#949ba4] space-y-1">
+      <div class="text-white font-semibold flex items-center space-x-1">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-[#57F287]"></i>
+        <span>과제 규격 검증 완료</span>
+      </div>
+      <p>단일 HTML / 비전공자 비유 / 디스코드 UI 완벽 준수</p>
+    </div>
+  </aside>
+
+  <!-- =====================================================================
+       JAVASCRIPT LOGIC & ANIMATIONS
+       ===================================================================== -->
+  <script>
+    // State management
+    const totalSlides = 7;
+    let currentSlide = 0;
+    let isAnimating = false;
+
+    // Slide Metadata (Channel titles & descriptions)
+    const slideMeta = [
+      {
+        channel: "01-표지-리터러시-접근",
+        desc: "이커머스 배송 정시 도착 예측 분석 계획서 | 데이터 리터러시 관점"
+      },
+      {
+        channel: "02-주제-수집설계",
+        desc: "핵심 분석 질문: 제품 무게 vs 할인율 & Target/Feature 변수 및 관측 단위 정의"
+      },
+      {
+        channel: "03-week02-편향진단",
+        desc: "생존자 편향 점검 계획: 취소/환불 및 결측 주문이 초래하는 데이터 누락 추적"
+      },
+      {
+        channel: "04-week03-정제로그",
+        desc: "임의 평균대치 금지 & 결측치 3대 원인(MCAR/MAR/MNAR) 판정 및 5열 정제 로그 계획"
+      },
+      {
+        channel: "05-week04-기술통계",
+        desc: "평균의 함정 극복: 평균 vs 중앙값 비교 & 표준편차·n수 페어링 및 변수별 요약 판정"
+      },
+      {
+        channel: "06-week04-분포시각화",
+        desc: "구간(bins) 20개 이상 히스토그램 시각화 & 이봉 분포(선박 vs 항공) 분리 분석"
+      },
+      {
+        channel: "07-결론-분석포부",
+        desc: "코드를 돌리기 전 직접 분포를 확인하고 쪼개는 비판적 데이터 리터러시 총결"
+      }
+    ];
+
+    // DOM Elements
+    const panes = document.querySelectorAll('.slide-pane');
+    const channelLinks = document.querySelectorAll('.channel-link');
+    const currentChannelTitle = document.getElementById('current-channel-title');
+    const currentChannelDesc = document.getElementById('current-channel-desc');
+    const slideNumCurrent = document.getElementById('slide-num-current');
+    const slideNumTotal = document.getElementById('slide-num-total');
+    const slideProgress = document.getElementById('slide-progress');
+
+    // Initialize Lucide Icons
+    function updateIcons() {
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    // Go to specific slide with Anime.js transitions
+    function goToSlide(targetIndex) {
+      if (targetIndex < 0 || targetIndex >= totalSlides) return;
+      if (targetIndex === currentSlide && panes[currentSlide].classList.contains('hidden') === false && !isAnimating) return;
+
+      isAnimating = true;
+      minim.audio.slideChange();
+
+      const prevPane = panes[currentSlide];
+      const nextPane = panes[targetIndex];
+
+      // Anime.js exit animation on current slide
+      anime({
+        targets: prevPane.querySelectorAll('.animate-item, .discord-embed'),
+        opacity: [1, 0],
+        translateY: [0, -15],
+        duration: 200,
+        easing: 'easeInQuad',
+        complete: function() {
+          prevPane.classList.add('hidden');
+
+          // Prepare next slide
+          nextPane.classList.remove('hidden');
+          currentSlide = targetIndex;
+
+          // Update header info & counters
+          currentChannelTitle.textContent = slideMeta[currentSlide].channel;
+          currentChannelDesc.textContent = slideMeta[currentSlide].desc;
+          slideNumCurrent.textContent = currentSlide + 1;
+          slideProgress.style.width = `${((currentSlide + 1) / totalSlides) * 100}%`;
+
+          // Update active channel styling
+          channelLinks.forEach((link, idx) => {
+            if (idx === currentSlide) {
+              link.classList.add('bg-[#35373c]', 'text-white', 'font-bold');
+              link.classList.remove('text-[#949ba4]');
+              const icon = link.querySelector('i');
+              if (icon) icon.classList.add('text-white');
+            } else {
+              link.classList.remove('bg-[#35373c]', 'text-white', 'font-bold');
+              link.classList.add('text-[#949ba4]');
+              const icon = link.querySelector('i');
+              if (icon) icon.classList.remove('text-white');
+            }
+          });
+
+          // Reset opacity/transforms for next elements
+          const enterTargets = nextPane.querySelectorAll('.animate-item, .discord-embed');
+          enterTargets.forEach(el => {
+            el.style.opacity = 0;
+            el.style.transform = 'translateY(20px)';
+          });
+
+          // Anime.js enter animation (staggered Discord feel)
+          anime({
+            targets: enterTargets,
+            opacity: [0, 1],
+            translateY: [20, 0],
+            duration: 400,
+            delay: anime.stagger(80),
+            easing: 'easeOutCubic',
+            complete: function() {
+              isAnimating = false;
+              // If entering slide 6 (Histogram), trigger special bar animation
+              if (currentSlide === 5) {
+                animateHistogramBars();
+              }
+            }
+          });
+
+          // Scroll viewport to top
+          document.getElementById('slide-viewport').scrollTop = 0;
+        }
+      });
+    }
+
+    // Special animation for SVG histogram bars in Slide 6
+    function animateHistogramBars() {
+      anime({
+        targets: '#bimodal-svg .hist-bar',
+        scaleY: [0, 1],
+        transformOrigin: '0px 110px',
+        duration: 600,
+        delay: anime.stagger(30),
+        easing: 'easeOutBack'
+      });
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        goToSlide(currentSlide + 1);
+      } else {
+        minim.audio.ping();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        goToSlide(currentSlide - 1);
+      } else {
+        minim.audio.ping();
+      }
+    }
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      } else if (e.key >= '1' && e.key <= '7') {
+        goToSlide(parseInt(e.key) - 1);
+      }
+    });
+
+    // Touch Swipe Gestures for Mobile
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    window.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleGesture();
+    }, { passive: true });
+
+    function handleGesture() {
+      const threshold = 50;
+      if (touchEndX < touchStartX - threshold) {
+        nextSlide();
+      } else if (touchEndX > touchStartX + threshold) {
+        prevSlide();
+      }
+    }
+
+    // Reaction Button Click Handler
+    function toggleReaction(btn) {
+      minim.audio.click();
+      const countSpan = btn.querySelector('.reaction-count');
+      let count = parseInt(countSpan.textContent) || 0;
+      if (btn.classList.contains('active')) {
+        btn.classList.remove('active');
+        countSpan.textContent = Math.max(0, count - 1);
+      } else {
+        btn.classList.add('active');
+        countSpan.textContent = count + 1;
+        // Mini bounce animation with Anime.js
+        anime({
+          targets: btn,
+          scale: [1, 1.25, 1],
+          duration: 300,
+          easing: 'easeOutElastic(1, .5)'
+        });
+      }
+    }
+
+    // Toggle Audio Feedback
+    function toggleSound() {
+      minim.audio.enabled = !minim.audio.enabled;
+      const icon = document.getElementById('sound-icon');
+      const tooltip = document.getElementById('sound-tooltip');
+      if (minim.audio.enabled) {
+        minim.audio.ping();
+        icon.setAttribute('data-lucide', 'volume-2');
+        tooltip.textContent = "디스코드 효과음 켜짐 (클릭시 토글)";
+      } else {
+        icon.setAttribute('data-lucide', 'volume-x');
+        tooltip.textContent = "효과음 음소거됨 (클릭시 토글)";
+      }
+      updateIcons();
+    }
+
+    // Toggle Fullscreen
+    function toggleFullscreen() {
+      minim.audio.click();
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Mobile Sidebar Toggle
+    function toggleSidebar() {
+      minim.audio.click();
+      const sidebar = document.getElementById('channel-sidebar');
+      sidebar.classList.toggle('hidden');
+    }
+
+    // Right Member Sidebar Toggle
+    function toggleMemberSidebar() {
+      minim.audio.click();
+      const memberSidebar = document.getElementById('member-sidebar');
+      memberSidebar.classList.toggle('hidden');
+    }
+
+    function toggleServerInfo() {
+      minim.audio.ping();
+      alert("📊 데이터 리터러시 101 중간고사 대체 과제 세미나 서버입니다.\n- 총 7개 슬라이드로 구성되어 있습니다.\n- 키보드 방향키(←, →)를 사용하여 탐색할 수 있습니다.");
+    }
+
+    // Initial setup on load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateIcons();
+      // Animate first slide elements in
+      const firstPane = panes[0];
+      const enterTargets = firstPane.querySelectorAll('.animate-item, .discord-embed');
+      anime({
+        targets: enterTargets,
+        opacity: [0, 1],
+        translateY: [25, 0],
+        duration: 500,
+        delay: anime.stagger(100),
+        easing: 'easeOutCubic'
+      });
+    });
+  </script>
+</body>
+</html>
